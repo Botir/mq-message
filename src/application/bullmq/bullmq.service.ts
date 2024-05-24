@@ -80,8 +80,9 @@ export class BullMQService implements OnModuleInit, OnModuleDestroy {
             async (job: Job) => {
                 try {
                     await callback(job.data);
-                    job.updateProgress(100); // Update progress to 100%
-                    await job.moveToCompleted('done', job.token, true); // Correct parameters
+                    await job.updateProgress(100); // Update progress to 100%
+                    console.log('HELLO');
+                    // await job.moveToCompleted('done', job.token, true); // Correct parameters
                 } catch (error) {
                     this.logger.error(`Job ${job.id} processing failed: ${error.message}`);
                     await job.moveToFailed(new Error(error.message), job.token);
