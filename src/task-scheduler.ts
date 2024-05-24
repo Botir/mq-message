@@ -7,7 +7,7 @@ async function bootstrap() {
 
     // @TODO run on cluster mode
     const taskService = app.get(TaskService);
-    await taskService.processTasks();
+    await taskService.onModuleInit();
 
     app.enableShutdownHooks();
 }

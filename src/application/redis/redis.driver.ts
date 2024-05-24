@@ -15,7 +15,12 @@ export class RedisDriver<T> {
         @Inject(Application.Redis.Config) private readonly config: RedisConfig,
         private eventEmitter: EventEmitter2,
     ) {
-        this.redisClient = new Redis(config.port, config.host, config.options);
+        const redisOptions = {
+            ...config.options,
+            maxRetriesPerRequest: null, // Ensure maxRetriesPerRequest is set to null
+        };
+
+        this.redisClient = new Redis(config.port, config.host, redisOptions);
 
         this.redisClient.on('connect', () => {
             this.logger.log('Redis client connected');

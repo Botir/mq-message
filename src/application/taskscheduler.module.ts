@@ -3,6 +3,8 @@ import { SharedModule } from '@common/shared.module';
 import { TaskModule } from './taskscheduler/task.module';
 import { RedisModule } from '@app/redis/redis.module';
 import { ConfigService } from '@common/config';
+import { BullMqModule } from '@app/bullmq/bullmq.module';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 
 @Module({
     imports: [
@@ -16,6 +18,8 @@ import { ConfigService } from '@common/config';
             }),
             inject: [ConfigService],
         }),
+        BullMqModule.forRootAsync(),
+        EventEmitterModule.forRoot(),
     ],
     providers: [],
     controllers: [],
