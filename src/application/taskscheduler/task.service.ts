@@ -23,8 +23,9 @@ export class TaskService implements OnModuleInit {
         this.bullMQService.subscribeToQueue('groupMessageQueue', async (data: any) => {
             try {
                 const { chatId, message, options } = data;
-                this.logger.log('Message received from BullMQ:', data);
-                // Add your message handling logic here
+                // Simulate sending message to Telegram
+                this.logger.log(`Sending message to chat ${chatId}: ${message}`);
+                // Implement the actual message sending logic here
             } catch (error) {
                 this.logger.error('Error processing message:', error);
             }

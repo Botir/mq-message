@@ -1,5 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Inject } from '@nestjs/common';
-import { Queue, Worker } from 'bullmq';
+import { Queue, Worker, QueueEvents, Job } from 'bullmq';
 import { RedisDriver } from '@app/redis/redis.driver';
 import { Application } from '@common/tokens';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -9,6 +9,7 @@ export class BullMQService implements OnModuleInit, OnModuleDestroy {
     private readonly logger = new Logger(BullMQService.name);
     private queues: Map<string, Queue> = new Map();
     private workers: Map<string, Worker> = new Map();
+    private queueEvents: Map<string, QueueEvents> = new Map();
 
     constructor(
         @Inject(Application.Redis.Driver) private redisDriver: RedisDriver<any>,
@@ -32,15 +33,24 @@ export class BullMQService implements OnModuleInit, OnModuleDestroy {
     private initializeBullMQ() {
         this.logger.log('Connected to Redis');
         this.eventEmitter.emit('bullmq.ready'); // Emit event when BullMQService is ready
-        // Additional initialization logic if needed
     }
 
     createQueue(name: string) {
         if (this.queues.has(name)) {
             return this.queues.get(name);
         }
-        const queue = new Queue(name, { connection: this.redisDriver.client });
+        const queue = new Queue(name, {
+            connection: this.redisDriver.client,
+        });
+        const events = new QueueEvents(name, { connection: this.redisDriver.client });
+        events.on('completed', (jobId) => {
+            this.logger.log(`Job ${jobId} has completed`);
+        });
+        events.on('failed', (jobId, failedReason) => {
+            this.logger.error(`Job ${jobId} has failed: ${failedReason}`);
+        });
         this.queues.set(name, queue);
+        this.queueEvents.set(name, events);
         this.logger.log(`Queue ${name} created`);
         return queue;
     }
@@ -51,7 +61,13 @@ export class BullMQService implements OnModuleInit, OnModuleDestroy {
             return;
         }
         const queue = this.createQueue(queueName);
-        await queue.add(queueName, data);
+        await queue.add(queueName, data, {
+            attempts: 5, // Retry up to 5 times
+            backoff: {
+                type: 'fixed',
+                delay: 1000, // Retry after 1 second
+            },
+        });
         this.logger.log(`Message sent to queue ${queueName}: ${JSON.stringify(data)}`);
     }
 
@@ -61,10 +77,23 @@ export class BullMQService implements OnModuleInit, OnModuleDestroy {
         }
         const worker = new Worker(
             queueName,
-            async (job) => {
-                callback(job.data);
+            async (job: Job) => {
+                try {
+                    await callback(job.data);
+                    job.updateProgress(100); // Update progress to 100%
+                    await job.moveToCompleted('done', job.token, true); // Correct parameters
+                } catch (error) {
+                    this.logger.error(`Job ${job.id} processing failed: ${error.message}`);
+                    await job.moveToFailed(new Error(error.message), job.token);
+                }
             },
-            { connection: this.redisDriver.client },
+            {
+                connection: this.redisDriver.client,
+                limiter: {
+                    max: 30, // maximum 30 jobs per second
+                    duration: 1000, // per second
+                },
+            },
         );
 
         this.workers.set(queueName, worker);
@@ -88,6 +117,10 @@ export class BullMQService implements OnModuleInit, OnModuleDestroy {
         for (const [name, queue] of this.queues) {
             await queue.close();
             this.logger.log(`Queue ${name} closed`);
+        }
+        for (const [name, events] of this.queueEvents) {
+            await events.close();
+            this.logger.log(`Events for queue ${name} closed`);
         }
         this.logger.log('BullMQ service cleanup completed');
     }
