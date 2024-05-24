@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Inject } from '@nest
 import { Queue, Worker } from 'bullmq';
 import { RedisDriver } from '@app/redis/redis.driver';
 import { Application } from '@common/tokens';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Injectable()
 export class BullMQService implements OnModuleInit, OnModuleDestroy {
@@ -9,14 +10,29 @@ export class BullMQService implements OnModuleInit, OnModuleDestroy {
     private queues: Map<string, Queue> = new Map();
     private workers: Map<string, Worker> = new Map();
 
-    constructor(@Inject(Application.Redis.Driver) private redisDriver: RedisDriver<any>) {}
+    constructor(
+        @Inject(Application.Redis.Driver) private redisDriver: RedisDriver<any>,
+        private eventEmitter: EventEmitter2,
+    ) {
+        this.logger.log('BullMQService constructor');
+    }
 
     async onModuleInit() {
-        if (this.redisDriver.isConnected() !== 'ready') {
-            this.logger.error('Failed to connect to Redis');
-            throw new Error('Failed to connect to Redis');
+        this.logger.log('BullMQService onModuleInit');
+        if (this.redisDriver.isConnected() === 'ready') {
+            this.initializeBullMQ();
+        } else {
+            this.logger.log('Waiting for Redis connection...');
+            this.eventEmitter.on('redis.ready', () => {
+                this.initializeBullMQ();
+            });
         }
+    }
+
+    private initializeBullMQ() {
         this.logger.log('Connected to Redis');
+        this.eventEmitter.emit('bullmq.ready'); // Emit event when BullMQService is ready
+        // Additional initialization logic if needed
     }
 
     createQueue(name: string) {
