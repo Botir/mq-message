@@ -23,23 +23,28 @@ export class BotService {
 
     private async sendMessagesToGroups() {
         for (const groupID of this.groups) {
-            const messagesCount = 100;
+            const messagesCount = 2;
             const promises = [];
             
             for (let i = 0; i < messagesCount; i++) {
-                const brokerMessage = JSON.stringify({
+                const brokerMessage = {
                     type: 'group',
                     chatId: groupID,
                     message: `${i} Random message`,
                     options: {
                         parse_mode: 'HTML',
                     },
-                });
+                };
 
                 promises.push(this.bullMQUsecase.sendQueueMessage('message-group', brokerMessage));
             }
     
             await Promise.all(promises);
+            const tasData = {
+                taskType: 'getChatMemberCount',
+                chatId: -1002046064942
+            };
+            await this.bullMQUsecase.sendQueueMessage('new-task', tasData);
         }
     }
 }

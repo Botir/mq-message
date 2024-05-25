@@ -140,6 +140,39 @@ export class BullMQService implements OnModuleInit, OnModuleDestroy {
         }        
     }
 
+
+    subscribeToTask(queueName: string, callback: (data: any) => void) {
+        if (!this.workers.has(queueName)) {
+            const worker = new Worker(
+                queueName,
+                async (job: Job) => {
+                    try {
+                        await this.processTask(job, callback);
+                    } catch (error) {
+                        this.logger.error(`Error processing task ${job.id}: ${error.message}`);
+                        await job.discard();
+                    }
+                },
+                { connection: this.redisDriver.client }
+            );
+    
+            this.workers.set(queueName, worker);
+            worker.on('completed', (job) => this.logger.log(`Task ${job.id} has truly completed`));
+            worker.on('failed', (job, err) => this.logger.error(`Task ${job.id} has failed: ${err.message}`));
+            this.logger.log(`Worker for task queue ${queueName} created`);
+        }
+    }
+    
+    private async processTask(job: Job, callback: (data: any) => void) {
+        try {
+            await callback(job.data);
+            await job.updateProgress(100);
+        } catch (error) {
+            this.logger.error(`Task ${job.id} processing failed: ${error.message}`);
+            throw error;
+        }
+    }
+
     async onModuleDestroy() {
         for (const [name, worker] of this.workers) {
             try {

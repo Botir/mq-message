@@ -40,6 +40,22 @@ export class TaskService implements OnModuleInit {
                 this.logger.error('Error processing message:', error);
             }
         });
+
+        this.logger.log('Subscribing to BullMQ tasks...');
+        this.bullMQService.subscribeToTask('new-task', async (data: any) => {
+            try {
+                const { taskType } = data;
+                if (taskType === 'getChatMemberCount') {
+                    const { chatId } = data;
+                    const memberCount = await this.getChatMemberCount(chatId).catch((error) => {
+                        console.error('Error parsing data:', error);
+                    });
+                    console.log(`getChatMemberCount: ${memberCount}`);
+                }
+            } catch (error) {
+                this.logger.error('Error processing task:', error);
+            }
+        });
     }
 
     async sendMessage(data: any): Promise<void> {
@@ -51,5 +67,16 @@ export class TaskService implements OnModuleInit {
         } catch (error) {
             console.error('Error sending message:', error);
         }
+    }
+
+    public async getChatMemberCount(chatId: number): Promise<number> {
+        try {
+            const members = await this.bot.api.getChatMemberCount(chatId);
+            return members;
+        } catch (error) {
+            console.error('Error getting chat member count:', error.response.data);
+            throw error;
+        }
+        return 0;
     }
 }

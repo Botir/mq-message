@@ -6,9 +6,9 @@ import { BullMQService } from '@app/bullmq/bullmq.service';
 export class BullMQUsecase {
     constructor(@Inject(Application.BullMQ.Driver) private bullMQ: BullMQService) {}
 
-    async sendQueueMessage(subject: string, message: string): Promise<void> {
+    async sendQueueMessage(subject: string, message: any): Promise<void> {
         try {
-            await this.bullMQ.sendBullMQMessage(subject, JSON.parse(message));
+            await this.bullMQ.sendBullMQMessage(subject, message);
             //console.log(`Queued message to ${subject}`);
         } catch (error) {
             console.error('Failed to queue message:', error);
