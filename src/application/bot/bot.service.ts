@@ -23,7 +23,9 @@ export class BotService {
 
     private async sendMessagesToGroups() {
         for (const groupID of this.groups) {
-            const messagesCount = 200;
+            const messagesCount = 100;
+            const promises = [];
+            
             for (let i = 0; i < messagesCount; i++) {
                 const brokerMessage = JSON.stringify({
                     type: 'group',
@@ -34,9 +36,10 @@ export class BotService {
                     },
                 });
 
-                // Send message to MQ
-                await this.bullMQUsecase.sendQueueMessage('message-group', brokerMessage);
+                promises.push(this.bullMQUsecase.sendQueueMessage('message-group', brokerMessage));
             }
+    
+            await Promise.all(promises);
         }
     }
 }
