@@ -6,7 +6,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 @Injectable()
 export class BotService {
     private readonly logger = new Logger(BotService.name);
-    private groups = [5947376037]; // Telegram group chat IDs
+    private groups = [5947376037, 7878787]; // Telegram group chat IDs
 
     constructor(
         @Inject(UseCases.MQ.SendMessageUsecase) private readonly bullMQUsecase: BullMQUsecase,
@@ -23,7 +23,7 @@ export class BotService {
 
     private async sendMessagesToGroups() {
         for (const groupID of this.groups) {
-            const messagesCount = 25;
+            const messagesCount = 2000;
             for (let i = 0; i < messagesCount; i++) {
                 const brokerMessage = JSON.stringify({
                     type: 'group',

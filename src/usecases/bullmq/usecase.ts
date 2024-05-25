@@ -9,7 +9,7 @@ export class BullMQUsecase {
     async sendQueueMessage(subject: string, message: string): Promise<void> {
         try {
             await this.bullMQ.sendBullMQMessage(subject, JSON.parse(message));
-            console.log(`Queued message to ${subject}`);
+            //console.log(`Queued message to ${subject}`);
         } catch (error) {
             console.error('Failed to queue message:', error);
             throw error;

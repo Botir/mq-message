@@ -20,11 +20,11 @@ export class TaskService implements OnModuleInit {
 
     private subscribeToMessages() {
         this.logger.log('Subscribing to BullMQ messages...');
-        this.bullMQService.createWorker('message-group', async (data: any) => {
+        this.bullMQService.subscribeToOrderQueue('message-group', async (data: any) => {
             try {
-                const { token } = data;
+                const { message } = data;
                 // Simulate sending message to Telegram
-                console.log(`job token ${token}`);
+                console.log(message);
                 //this.logger.log(`Sending message to chat ${chatId}: ${message}`);
                 // Implement the actual message sending logic here
             } catch (error) {
