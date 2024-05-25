@@ -82,13 +82,33 @@ export class BullMQService implements OnModuleInit, OnModuleDestroy {
         const worker = new Worker(
             queueName,
             async (job: Job) => {
-                const chatId = job.data.chatId as string;
+                const chatId = job.data.chatUs as string;
+                const isPrivate = job.data.isPrivate as boolean; // Assuming this information is available
+                const limit = isPrivate ? 30 : 20;  // 30 messages per minute for private, 20 for groups
                 const key = `rate_limit:${queueName}:${chatId}`;
+                const globalKey = `rate_limit:global:per_second`;
+    
+                // Increment the global counter and check the limit
+                const globalCount = await this.redisDriver.client.incr(globalKey);
+                if (globalCount === 1) {
+                    await this.redisDriver.client.expire(globalKey, 1);  // Expire every second
+                }
+    
+                if (globalCount > 30) {
+                    // Delay globally exceeding messages
+                    const globalDelay = 1000; // Delay by 1 second
+                    await this.sendBullMQMessage(queueName, job.data, { delay: globalDelay });
+                    await job.discard();
+                    this.logger.log(`Global rate limit exceeded, requeuing job ${job.id} with a delay of 1s.`);
+                    return;
+                }
+    
                 const currentCount = await this.redisDriver.client.incr(key);
                 if (currentCount === 1) {
                     await this.redisDriver.client.expire(key, 60);  // Set the expiry on first use
                 }
-                if (currentCount <= 20) {
+    
+                if (currentCount <= limit) {
                     try {
                         await callback(job.data);
                         await job.updateProgress(100);  // Mark job as complete
@@ -97,7 +117,8 @@ export class BullMQService implements OnModuleInit, OnModuleDestroy {
                         await job.moveToFailed(new Error(error.message), job.token);
                     }
                 } else {
-                    const delay = 1000 * (currentCount - 20);
+                    // Requeue with a delay if rate limit is exceeded
+                    const delay = 1000 * (currentCount - limit);
                     await this.sendBullMQMessage(queueName, job.data, { delay });
                     await job.discard();  // Discard the current job attempt
                     this.logger.log(`Job ${job.id} for chat ${chatId} requeued with a ${delay} ms delay due to rate limit`);
@@ -107,11 +128,13 @@ export class BullMQService implements OnModuleInit, OnModuleDestroy {
                 connection: this.redisDriver.client,
             }
         );
+    
         this.workers.set(queueName, worker);
         worker.on('completed', (job) => this.logger.log(`Job ${job.id} has truly completed`));
         worker.on('failed', (job, err) => this.logger.error(`Job ${job.id} has failed: ${err.message}`));
         this.logger.log(`Worker for queue ${queueName} created`);
     }
+    
 
     async onModuleDestroy() {
         for (const [name, worker] of this.workers) {
