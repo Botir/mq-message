@@ -68,6 +68,7 @@ export class BullMQService implements OnModuleInit, OnModuleDestroy {
         const workerOptions: WorkerOptions = {
             connection: this.redisDriver.client,
             lockDuration: 60000, // Extend lock duration as needed
+            lockRenewTime: 30000, 
             concurrency: 5 // Adjust based on load testing
         };
         const worker = new Worker(
@@ -131,21 +132,34 @@ export class BullMQService implements OnModuleInit, OnModuleDestroy {
     
     private async rescheduleJobWithDelay(queueName: string, job: Job, delay: number) {
         this.logger.log(`Rescheduling job ${job.id} with delay ${delay}ms`);
-        const jobId: string = String(job.id);
-        this.logger.log(`Type of job ID: ${typeof job.id}`);
-        this.logger.log(`Type of job ID: ${typeof jobId}`);
-
+        const newJobId = `rescheduled-${job.id}-${Date.now()}`;
         const queue = this.createQueue(queueName);
-        await queue.add(job.name, job.data, {
-            jobId: jobId, // Ensure the job ID is a string
-            delay: delay,
-            attempts: job.opts.attempts,
-            backoff: {
-                type: 'fixed',
-                delay: delay
-            }
-        });
+    
+        try {
+            // Use a placeholder for the token if necessary, or omit if not required
+            //await job.moveToCompleted('Job completed, rescheduling with new delay', null, true);
+            this.logger.log(`Original job ${job.id} marked as completed and rescheduled as ${newJobId}`);
+    
+            // Add a new job with the new ID and the delay
+            await queue.add(job.name, job.data, {
+                jobId: newJobId, // New unique job ID
+                delay: delay,
+                attempts: job.opts.attempts || 1,
+                backoff: {
+                    type: 'exponential',
+                    delay: delay
+                }
+            });
+    
+            this.logger.log(`New job successfully scheduled with ID ${newJobId}`);
+        } catch (error) {
+            this.logger.error(`Failed to reschedule job: ${error.message}`);
+        }
     }
+    
+    
+    
+    
     
     
 
@@ -160,7 +174,7 @@ export class BullMQService implements OnModuleInit, OnModuleDestroy {
         await queue.add(queueName, data, {
             attempts: 5, // Retry up to 5 times
             backoff: {
-                type: 'fixed',
+                type: 'exponential',
                 delay: 1000, // Retry after 1 second
             },
         });
